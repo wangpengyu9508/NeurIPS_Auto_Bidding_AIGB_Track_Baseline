@@ -6,6 +6,8 @@ from torch.utils.data import DataLoader, WeightedRandomSampler
 import logging
 import pickle
 
+np.random.seed(1)
+
 # 配置日志
 logging.basicConfig(
     level=logging.INFO,

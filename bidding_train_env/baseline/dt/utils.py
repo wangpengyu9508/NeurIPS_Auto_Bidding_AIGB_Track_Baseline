@@ -7,6 +7,8 @@ import pickle
 import random
 
 random.seed(1)
+np.random.seed(1)
+torch.manual_seed(1)
 
 
 class EpisodeReplayBuffer(Dataset):
