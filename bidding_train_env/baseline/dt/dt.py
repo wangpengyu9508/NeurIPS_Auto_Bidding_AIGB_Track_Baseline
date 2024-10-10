@@ -5,7 +5,6 @@ import os
 import math
 
 torch.manual_seed(1)
-math.random.seed(1)
 
 class CausalSelfAttention(nn.Module):
     def __init__(self, config):
@@ -70,7 +69,7 @@ class Block(nn.Module):
 class DecisionTransformer(nn.Module):
 
     def __init__(self, state_dim, act_dim, state_mean, state_std, action_tanh=False, K=20, max_ep_len=48, scale=1000,
-                 target_return=3):
+                 target_return=1):
         super(DecisionTransformer, self).__init__()
         self.device = "cpu"
 
