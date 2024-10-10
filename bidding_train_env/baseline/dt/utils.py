@@ -6,9 +6,11 @@ import numpy as np
 import pickle
 import random
 
+random.seed(1)
+
 
 class EpisodeReplayBuffer(Dataset):
-    def __init__(self, state_dim, act_dim, data_path, max_ep_len=24, scale=2000, K=20):
+    def __init__(self, state_dim, act_dim, data_path, max_ep_len=48, scale=1000, K=20):
         self.device = "cpu"
         super(EpisodeReplayBuffer, self).__init__()
         self.max_ep_len = max_ep_len
@@ -16,7 +18,7 @@ class EpisodeReplayBuffer(Dataset):
 
         self.state_dim = state_dim
         self.act_dim = act_dim
-        training_data = pd.read_csv(data_path)
+        training_data = pickle.load(open(data_path, 'rb'))
 
         def safe_literal_eval(val):
             if pd.isna(val):
