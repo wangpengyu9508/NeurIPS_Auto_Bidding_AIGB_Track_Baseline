@@ -136,6 +136,7 @@ class DecisionTransformer(nn.Module):
         returns_embeddings = self.embed_return(returns_to_go)
         rewards_embeddings = self.embed_reward(rewards)
         time_embeddings = self.embed_timestep(timesteps)
+        # time_embeddings = self.embed_timestep(timesteps // 8)
 
         state_embeddings = state_embeddings + time_embeddings
         action_embeddings = action_embeddings + time_embeddings
@@ -281,4 +282,4 @@ class DecisionTransformer(nn.Module):
     def load_net(self, load_path="saved_model/DTtest", device='cpu'):
         file_path = load_path
         self.load_state_dict(torch.load(file_path, map_location=device))
-        print(f"Model loaded from {self.device}.")
+        # print(f"Model loaded from {self.device}.")

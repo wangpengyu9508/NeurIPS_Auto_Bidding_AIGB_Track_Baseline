@@ -31,14 +31,14 @@ class TestDataLoader:
         Returns:
             pd.DataFrame: The raw data as a DataFrame.
         """
-        if os.path.exists(self.raw_data_path):
-            with open(self.raw_data_path, 'rb') as file:
-                return pickle.load(file)
-        else:
-            tem = pd.read_csv(self.file_path)
-            with open(self.raw_data_path, 'wb') as file:
-                pickle.dump(tem, file)
-            return tem
+        # if os.path.exists(self.raw_data_path):
+        #     with open(self.raw_data_path, 'rb') as file:
+        #         return pickle.load(file)
+        # else:
+        tem = pd.read_csv(self.file_path)
+        # with open(self.raw_data_path, 'wb') as file:
+        #     pickle.dump(tem, file)
+        return tem
 
     def _get_test_data_dict(self):
         """
