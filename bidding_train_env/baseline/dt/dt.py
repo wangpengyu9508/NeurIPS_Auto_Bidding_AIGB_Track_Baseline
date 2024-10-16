@@ -69,7 +69,7 @@ class Block(nn.Module):
 class DecisionTransformer(nn.Module):
 
     def __init__(self, state_dim, act_dim, state_mean, state_std, action_tanh=False, K=20, max_ep_len=48, scale=1000,
-                 target_return=1):
+                 target_return=4):
         super(DecisionTransformer, self).__init__()
         self.device = "cpu"
 
@@ -105,6 +105,7 @@ class DecisionTransformer(nn.Module):
         self.transformer = nn.ModuleList([Block(block_config) for _ in range(block_config['n_layer'])])
 
         self.embed_timestep = nn.Embedding(self.max_ep_len, self.hidden_size)
+        self.embed_timestep_window = nn.Embedding(self.max_ep_len, self.hidden_size)
         self.embed_return = torch.nn.Linear(1, self.hidden_size)
         self.embed_reward = torch.nn.Linear(1, self.hidden_size)
         self.embed_state = torch.nn.Linear(self.state_dim, self.hidden_size)
@@ -136,12 +137,12 @@ class DecisionTransformer(nn.Module):
         returns_embeddings = self.embed_return(returns_to_go)
         rewards_embeddings = self.embed_reward(rewards)
         time_embeddings = self.embed_timestep(timesteps)
-        # time_embeddings = self.embed_timestep(timesteps // 8)
+        time_window_embeddings = self.embed_timestep_window(timesteps // 8)
 
-        state_embeddings = state_embeddings + time_embeddings
-        action_embeddings = action_embeddings + time_embeddings
-        returns_embeddings = returns_embeddings + time_embeddings
-        rewards_embeddings = rewards_embeddings + time_embeddings
+        state_embeddings = state_embeddings + time_embeddings + time_window_embeddings
+        action_embeddings = action_embeddings + time_embeddings + time_window_embeddings
+        returns_embeddings = returns_embeddings + time_embeddings + time_window_embeddings
+        rewards_embeddings = rewards_embeddings + time_embeddings + time_window_embeddings
 
         stacked_inputs = torch.stack(
             (returns_embeddings, state_embeddings, action_embeddings), dim=1
@@ -219,7 +220,23 @@ class DecisionTransformer(nn.Module):
         action_preds = action_preds.reshape(-1, act_dim)[attention_mask.reshape(-1) > 0]
         action_target = action_target.reshape(-1, act_dim)[attention_mask.reshape(-1) > 0]
 
-        loss = torch.mean((action_preds - action_target) ** 2)
+        # budget flow speed ratio
+        states_ori = states * self.state_std + self.state_mean
+        budget_left = states_ori[:, :, 1:2]
+        time_left = states_ori[:, :, 0:1]
+        flow_speed = budget_left / time_left
+        flow_speed = flow_speed.reshape(-1, act_dim)[[attention_mask.reshape(-1) > 0]]
+
+        # 考虑pvalue
+        p_value_mean = states_ori[:, :, -5:-4]
+        his_p_value_mean = states_ori[:, :, 5:6]
+        p_value_roi = p_value_mean / his_p_value_mean
+        p_value_roi = p_value_roi.reshape(-1, act_dim)[[attention_mask.reshape(-1) > 0]]
+        p_value_roi = torch.tanh(p_value_roi)
+        action_factor = flow_speed * p_value_roi
+        
+        loss = torch.mean((action_preds - (action_target + action_factor)) ** 2)
+        # loss = torch.mean((action_preds - action_target) ** 2)
 
         self.optimizer.zero_grad()
         loss.backward()

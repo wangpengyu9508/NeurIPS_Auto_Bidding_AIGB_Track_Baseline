@@ -21,6 +21,7 @@ class EpisodeReplayBuffer(Dataset):
         self.state_dim = state_dim
         self.act_dim = act_dim
         training_data = pickle.load(open(data_path, 'rb'))
+        # training_data = pd.read_csv(data_path)
 
         def safe_literal_eval(val):
             if pd.isna(val):
@@ -35,16 +36,22 @@ class EpisodeReplayBuffer(Dataset):
         training_data["next_state"] = training_data["next_state"].apply(safe_literal_eval)
         self.trajectories = training_data
 
-        self.states, self.rewards, self.actions, self.returns, self.traj_lens, self.dones = [], [], [], [], [], []
+        self.states, self.rewards, self.actions, self.returns, self.traj_lens, self.dones, self.costs, self.cpas, self.convs = [], [], [], [], [], [], [], [], []
         state = []
         reward = []
         action = []
         dones = []
+        cost = []
+        cpa = []
+        conv = []
         for index, row in self.trajectories.iterrows():
             state.append(row["state"])
             reward.append(row['reward'])
             action.append(row["action"])
             dones.append(row["done"])
+            cost.append(row["realAllCost"])
+            cpa.append(row["CPAConstraint"])
+            conv.append(row["realAllConversion"])
             if row["done"]:
                 if len(state) != 1:
                     self.states.append(np.array(state))
@@ -53,10 +60,16 @@ class EpisodeReplayBuffer(Dataset):
                     self.returns.append(sum(reward))
                     self.traj_lens.append(len(state))
                     self.dones.append(np.array(dones))
+                    self.costs.append(np.array(cost))
+                    self.cpas.append(np.array(cpa))
+                    self.convs.append(np.array(conv))
                 state = []
                 reward = []
                 action = []
                 dones = []
+                cost = []
+                cpa = []
+                conv = []
         self.traj_lens, self.returns = np.array(self.traj_lens), np.array(self.returns)
 
         tmp_states = np.concatenate(self.states, axis=0)
@@ -66,7 +79,7 @@ class EpisodeReplayBuffer(Dataset):
         for i in range(len(self.states)):
             self.trajectories.append(
                 {"observations": self.states[i], "actions": self.actions[i], "rewards": self.rewards[i],
-                 "dones": self.dones[i]})
+                 "dones": self.dones[i], "costs": self.costs[i], "cpas": self.cpas[i], "convs": self.convs[i]})
 
         self.K = K
         self.pct_traj = 1.
@@ -74,6 +87,8 @@ class EpisodeReplayBuffer(Dataset):
         num_timesteps = sum(self.traj_lens)
         num_timesteps = max(int(self.pct_traj * num_timesteps), 1)
         sorted_inds = np.argsort(self.returns)  # lowest to highest
+        # print(self.returns) [29. 36. 54. 16. 12. 13. 23. 22. 36. 29.  0. 16. 16. 13. 30. 23. 25. 16. 17. 28.] realAllConversion
+        # print(sorted_inds) [10  4  5 13 17  3 11 12 18  7  6 15 16 19  0  9 14  8  1  2] adv num
         num_trajectories = 1
         timesteps = self.traj_lens[sorted_inds[-1]]
         ind = len(self.trajectories) - 2
@@ -82,23 +97,27 @@ class EpisodeReplayBuffer(Dataset):
             num_trajectories += 1
             ind -= 1
         self.sorted_inds = sorted_inds[-num_trajectories:]
-
+        # print(self.sorted_inds) [10  4  5 13 17  3 11 12 18  7  6 15 16 19  0  9 14  8  1  2]
         self.p_sample = self.traj_lens[self.sorted_inds] / sum(self.traj_lens[self.sorted_inds])
 
     def __getitem__(self, index):
         traj = self.trajectories[int(self.sorted_inds[index])]
         start_t = random.randint(0, traj['rewards'].shape[0] - 1)
-
         s = traj['observations'][start_t: start_t + self.K]
         a = traj['actions'][start_t: start_t + self.K]
         r = traj['rewards'][start_t: start_t + self.K].reshape(-1, 1)
+        cost = traj['costs'][start_t: start_t + self.K]
+        cpa = traj['cpas'][start_t: start_t + self.K]
+        conv = traj['convs'][start_t: start_t + self.K]
+        penaty = self.getScore_penaty(cost, conv, cpa)
+        r = r * penaty
         if 'terminals' in traj:
             d = traj['terminals'][start_t: start_t + self.K]
         else:
             d = traj['dones'][start_t: start_t + self.K]
         timesteps = np.arange(start_t, start_t + s.shape[0])
         timesteps[timesteps >= self.max_ep_len] = self.max_ep_len - 1  # padding cutoff
-        rtg = self.discount_cumsum(traj['rewards'][start_t:], gamma=1.)[:s.shape[0] + 1].reshape(-1, 1)
+        rtg = self.discount_cumsum(traj['rewards'][start_t:] * penaty, gamma=1.)[:s.shape[0] + 1].reshape(-1, 1)
         if rtg.shape[0] <= s.shape[0]:
             rtg = np.concatenate([rtg, np.zeros((1, 1))], axis=0)
 
@@ -128,4 +147,14 @@ class EpisodeReplayBuffer(Dataset):
         for t in reversed(range(x.shape[0] - 1)):
             discount_cumsum[t] = x[t] + gamma * discount_cumsum[t + 1]
         return discount_cumsum
+    
+    def getScore_penaty(self, cost, conv, cpa_constraint):
+        cpa = np.mean(cost / (conv + 1e-10))
+        cpa_constraint = np.mean(cpa_constraint)
+        beta = 2
+        penalty = 1
+        if cpa > cpa_constraint:
+            coef = cpa / cpa_constraint
+            penalty = pow(coef, beta)
+        return penalty
 
