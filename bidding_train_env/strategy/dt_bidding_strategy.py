@@ -9,6 +9,7 @@ from bidding_train_env.strategy.base_bidding_strategy import BaseBiddingStrategy
 import torch
 import pickle
 import math
+import json
 
 
 class DtBiddingStrategy(BaseBiddingStrategy):
@@ -22,7 +23,7 @@ class DtBiddingStrategy(BaseBiddingStrategy):
         file_name = os.path.dirname(os.path.realpath(__file__))
         dir_name = os.path.dirname(file_name)
         dir_name = os.path.dirname(dir_name)
-        model_path = os.path.join(dir_name, "saved_model", "DTtest", "dt.pt")
+        model_path = os.path.join(dir_name, "saved_model", "DTtest", "dt_6.pt")
         picklePath = os.path.join(dir_name, "saved_model", "DTtest", "normalize_dict.pkl")
 
         with open(picklePath, 'rb') as f:
@@ -30,6 +31,8 @@ class DtBiddingStrategy(BaseBiddingStrategy):
         self.model = DecisionTransformer(state_dim=16, act_dim=1, state_mean=normalize_dict["state_mean"],
                                          state_std=normalize_dict["state_std"])
         self.model.load_net(model_path)
+        with open(os.path.join(dir_name, "saved_model", "DTtest", "adv_period.json"), 'r') as file:
+            self.adv_period = json.load(file)
 
     def reset(self):
         self.remaining_budget = self.budget
@@ -103,7 +106,32 @@ class DtBiddingStrategy(BaseBiddingStrategy):
 
         if timeStepIndex == 0:
             self.model.init_eval()
+
+        kcate = str(int(self.category))
+        kcpa = str(int(self.cpa))
+        kbudget = str(int(self.budget))
+        key = kcate + "_" + kcpa + "_" + kbudget
+        self.adv_period[key] += 1
+
+        tr = 0.002
+        if self.adv_period[key]//48 == 0:
+            tr = 0.004
+        elif self.adv_period[key]//48 == 1:
+            tr = 0.012
+        elif self.adv_period[key]//48 == 2:
+            tr = 0.012
+        elif self.adv_period[key]//48 == 3:
+            tr = 0.015
+        elif self.adv_period[key]//48 == 4:
+            tr = 0.004
+        elif self.adv_period[key]//48 == 5:
+            tr = 0.017
+        elif self.adv_period[key]//48 == 6:
+            tr = 0.001
+        else:
+            raise Exception("not fond key in dict, current key: ", key, ", adv_period: ",self.adv_period)
         
+
         # adv = 0
         # if self.category == 0 and self.cpa == 100 and self.budget == 2900:
         #     adv = 0
@@ -352,7 +380,7 @@ class DtBiddingStrategy(BaseBiddingStrategy):
         #     target_return = 6
         #     risk = 0.1
         
-        alpha = self.model.take_actions(test_state, target_return = 0.002,
+        alpha = self.model.take_actions(test_state, target_return = tr,
                                         pre_reward=sum(history_conversion[-1]) if len(history_conversion) != 0 else None)
         
         # richiness = budget_left / time_left - 1
