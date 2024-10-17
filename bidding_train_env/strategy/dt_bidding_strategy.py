@@ -352,7 +352,7 @@ class DtBiddingStrategy(BaseBiddingStrategy):
         #     target_return = 6
         #     risk = 0.1
         
-        alpha = self.model.take_actions(test_state, target_return = 0,
+        alpha = self.model.take_actions(test_state, target_return = 0.002,
                                         pre_reward=sum(history_conversion[-1]) if len(history_conversion) != 0 else None)
         
         # richiness = budget_left / time_left - 1

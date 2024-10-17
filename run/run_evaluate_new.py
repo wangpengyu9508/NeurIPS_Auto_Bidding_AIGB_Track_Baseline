@@ -128,8 +128,8 @@ def run_mult_adv(file_path, test_epoch, save_path=None): # 循环测试每一个
 if __name__ == '__main__':
     
     root_dir = "/Users/wangpengyu03/NeurIPS_Auto_Bidding_AIGB_Track_Baseline/data/traffic/"
-    data_list = ['period-7.csv', 'period-10.csv', 'period-13.csv']
-    # data_list = ['period-8.csv']
+    data_list = ['period-7.csv', 'period-8.csv', 'period-9.csv', 'period-10.csv', 'period-11.csv', 'period-12.csv', 'period-13.csv']
+    # data_list = ['period-12.csv','period-13.csv']
     score = []
 
     for i in range(len(data_list)):
