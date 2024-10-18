@@ -109,7 +109,6 @@ class EpisodeReplayBuffer(Dataset):
         cost = traj['costs'][start_t: start_t + self.K]
         cpa = traj['cpas'][start_t: start_t + self.K]
         conv = traj['convs'][start_t: start_t + self.K]
-        # alpha = 1.5 # 搜索 0.9-2.0, 间隔 0.02
         penaty = self.getScore_penaty(cost, conv, cpa)
         r = r * penaty
         if 'terminals' in traj:
@@ -119,6 +118,7 @@ class EpisodeReplayBuffer(Dataset):
         timesteps = np.arange(start_t, start_t + s.shape[0])
         timesteps[timesteps >= self.max_ep_len] = self.max_ep_len - 1  # padding cutoff
         rtg = self.discount_cumsum(traj['rewards'][start_t:] * penaty, gamma=1.)[:s.shape[0] + 1].reshape(-1, 1)
+        # rtg = self.discount_cumsum(traj['rewards'][start_t:], gamma=1.)[:s.shape[0] + 1].reshape(-1, 1)
         if rtg.shape[0] <= s.shape[0]:
             rtg = np.concatenate([rtg, np.zeros((1, 1))], axis=0)
 
@@ -153,11 +153,7 @@ class EpisodeReplayBuffer(Dataset):
         cpa = np.mean(cost / (conv + 1e-10))
         cpa_constraint = np.mean(cpa_constraint)
         beta = 2
-        # penalty = 1
         coef = cpa / cpa_constraint
         penalty = pow(coef, beta)
-        # if cpa > cpa_constraint:
-        #     coef = cpa / cpa_constraint
-        #     penalty = pow(coef, beta)
         return penalty
 
